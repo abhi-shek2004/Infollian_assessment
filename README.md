@@ -94,16 +94,49 @@ curl -X PUT "http://localhost:3000/api/nodes/Node-B/status" -H "Content-Type: ap
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ Architecture & Data Flow
 
-To achieve an even distribution of traffic and support weighted nodes, this project uses **Virtual Nodes**.
+To achieve an even distribution of traffic and support weighted nodes, this project uses **Virtual Nodes** mapped to a Consistent Hash Ring.
 
-```text
-         Hash Ring (0 ─────────────────────── 4,294,967,295)
-         │                                                 │
-   Node-A#vnode-0    Node-B#vnode-0    Node-C#vnode-0    │
-         │                │                  │            │
-   [IP Hash] ──► finds nearest vnode clockwise ──► routed to that node's owner
+```mermaid
+graph TD
+    %% Entities
+    Client[Client Request]
+    RateLimiter[Rate Limiter<br>Fixed Window Map]
+    HashRing[Consistent Hash Ring<br>FNV-1a 32-bit]
+    HealthChecker[Health Checker<br>setInterval Polling]
+    
+    %% Nodes
+    NodeA[Node-A<br>Weight: 1]
+    NodeB[Node-B<br>Weight: 2]
+    NodeC[Node-C<br>Weight: 1]
+    
+    %% Flow
+    Client -->|GET /api/request?ip=x.x.x.x| RateLimiter
+    
+    RateLimiter -- "If > 10 req/min" --> Block[429 Too Many Requests]
+    RateLimiter -- "Allowed" --> HashRing
+    
+    %% Hash Ring routing
+    HashRing -- "IP Hash >= vNode Hash" --> NodeA
+    HashRing -- "IP Hash >= vNode Hash" --> NodeB
+    HashRing -- "IP Hash >= vNode Hash" --> NodeC
+    
+    %% Health Checker
+    HealthChecker -. "Polls & Updates Status" .-> HashRing
+    
+    %% Dashboard
+    Metrics[Metrics Store<br>In-memory]
+    HashRing -. "Logs Request" .-> Metrics
+    RateLimiter -. "Logs Blocked" .-> Metrics
+    Dashboard[Live HTML Dashboard] -. "Fetches Data" .-> Metrics
+    
+    classDef default fill:#1a202c,stroke:#2d3748,stroke-width:2px,color:#fff;
+    classDef core fill:#2b6cb0,stroke:#2c5282,stroke-width:2px,color:#fff;
+    classDef error fill:#9b2c2c,stroke:#742a2a,stroke-width:2px,color:#fff;
+    
+    class RateLimiter,HashRing,HealthChecker,Metrics core;
+    class Block error;
 ```
 
 - Each real node creates `150 * weight` virtual nodes on the ring.
