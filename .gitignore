@@ -10,3 +10,11 @@ logs/*.log
 
 # OS
 .DS_Store
+
+# venv
+venv/
+venv/*
+
+# ai_docs
+ai_docs/
+ai_docs/*

@@ -6,22 +6,99 @@ A production-grade Node.js/Express load balancer that routes incoming IP address
 
 ---
 
-## What Changed From the Starter Code
+## 🎯 Task Requirements & Deliverables Achieved
 
-| Before | After |
-|---|---|
-| `Math.random()` → any node | FNV-1a hash → deterministic, consistent node |
-| No persistence across requests | Same IP always maps to same node |
-| 3 nodes, equal weighting | Weighted nodes (Node-B gets 2× traffic) |
-| No health awareness | Unhealthy nodes auto-removed from ring |
-| No rate protection | Fixed-window rate limiter (10 req/min) |
-| Console output only | REST API + live metrics dashboard |
+This repository completely fulfills the assignment requirements, including **all core features** and **all bonus challenges**.
+
+### ✅ Core Features (Completed)
+1. **Replace random selection with Proper Algorithm:** The `Math.random()` approach has been replaced with a **Consistent Hash Ring** utilizing the `FNV-1a` 32-bit hash algorithm.
+2. **Consistent IP Routing:** An IP address is mathematically mapped to a position on the ring. It will **always** reach the exact same node, even across multiple requests. If a node fails, only a minimal subset of IPs is re-mapped.
+3. **Add logging for each routed request:** The original `identifyNode` logger function was preserved exactly as requested and is invoked for every routed request.
+4. **Beginner-friendly & Simplicity:** The logic relies purely on in-memory JS structures (`Array`, `Map`). It avoids concurrency issues and external databases.
+
+### 🚀 Bonus Challenges (Completed)
+- **Basic Node Health Checks:** A background health checker polls nodes on a `setInterval`. If a node fails, it is automatically temporarily removed from the ring to prevent dropped traffic. 
+- **Weighted Routing:** Implemented using *Virtual Nodes*. For example, `Node-B` has a weight of 2, so it receives roughly 2× the traffic of `Node-A`.
+- **Simple Metrics Dashboard:** A clean, live HTML dashboard is available at `/dashboard`. It auto-refreshes every 5 seconds to show active traffic share, total requests, and node health.
+- **Rate Limiting Logic:** A fixed-window rate limiter prevents abuse (default: 10 requests per minute per IP), returning a `429 Too Many Requests` error when the limit is breached.
+
+### 📦 Optional Deliverable: Postman Collection
+A full Postman collection is included in the `postman/` directory, which demonstrates the API endpoints, consistent routing, failover, and rate limiting.
 
 ---
 
-## How It Works — The Hash Ring
+## ⚙️ Prerequisites
 
+- **Node.js** v20 or later
+- **npm** v9 or later
+
+---
+
+## 🚀 Installation & Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/abhi-shek2004/Infollian_assessment.git
+   cd Infollian_assessment
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment**
+   ```bash
+   cp .env.example .env
+   ```
+   *(You can edit `.env` to change the port, rate limit, or virtual node count if desired).*
+
+4. **Start the Server**
+   ```bash
+   npm start
+   ```
+
+You will see an ASCII startup banner. Once running, open **http://localhost:3000/dashboard** in your browser.
+
+---
+
+## 📚 API Reference & Testing
+
+You can use the provided **Postman Collection** (`postman/load-balancer.postman_collection.json`) or use `curl` commands below to test the API.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/request?ip=x.x.x.x` | Route an IP to a node (Core Requirement) |
+| `GET` | `/api/request?simulate=true` | Route a randomly generated IP |
+| `GET` | `/api/nodes` | List all nodes with their weight and health status |
+| `PUT` | `/api/nodes/:id/status` | Manually set a node's health (to simulate a crash) |
+| `GET` | `/api/metrics` | Full JSON metrics snapshot |
+| `GET` | `/dashboard` | Live browser metrics dashboard |
+
+### Quick `curl` Tests
+
+**1. Test Consistent Routing (Run 5+ times, it always returns the same node)**
+```bash
+curl "http://localhost:3000/api/request?ip=192.168.1.100"
 ```
+
+**2. Test Rate Limiting (Spam 15 requests)**
+```bash
+for i in {1..15}; do curl -s "http://localhost:3000/api/request?ip=8.8.8.8"; echo ""; done
+```
+
+**3. Simulate Node Failure (Watch traffic re-route)**
+```bash
+curl -X PUT "http://localhost:3000/api/nodes/Node-B/status" -H "Content-Type: application/json" -d '{"healthy": false}'
+```
+
+---
+
+## 🏗️ Architecture Overview
+
+To achieve an even distribution of traffic and support weighted nodes, this project uses **Virtual Nodes**.
+
+```text
          Hash Ring (0 ─────────────────────── 4,294,967,295)
          │                                                 │
    Node-A#vnode-0    Node-B#vnode-0    Node-C#vnode-0    │
@@ -29,159 +106,33 @@ A production-grade Node.js/Express load balancer that routes incoming IP address
    [IP Hash] ──► finds nearest vnode clockwise ──► routed to that node's owner
 ```
 
-1. Each node is placed on the ring as **N virtual nodes** (`N = weight × 150`)
-2. `Node-B` (weight=2) has 300 virtual nodes vs 150 for the others — it handles ~50% of traffic
-3. An IP is hashed with **FNV-1a** and the closest clockwise vnode determines its node
-4. If a node goes down, its vnodes vanish — IPs re-map only to the remaining nodes
+- Each real node creates `150 * weight` virtual nodes on the ring.
+- Node-A (weight 1) = 150 virtual nodes.
+- Node-B (weight 2) = 300 virtual nodes (receives ~50% of total traffic).
+- An IP is hashed with `FNV-1a` (fast, deterministic, zero-dependency) to find its position on the ring. 
+- A binary search efficiently maps the IP to the nearest virtual node.
 
 ---
 
-## Prerequisites
-
-- **Node.js** v20 or later
-- **npm** v9 or later
-
----
-
-## Installation & Setup
-
-```bash
-# 1. Clone the repository
-git clone <your-repo-url>
-cd smart-consistent-hash-load-balancer
-
-# 2. Install dependencies
-npm install
-
-# 3. Configure environment
-cp .env.example .env
-# Edit .env if you want to change defaults (port, rate limits, etc.)
-
-# 4. Start the server
-npm run dev       # Development (auto-restarts on file changes)
-# or
-npm start         # Production
-```
-
----
-
-## Running the Server
-
-```bash
-npm run dev
-```
-
-You'll see:
-```
-┌─────────────────────────────────────────────────┐
-│   Smart Consistent Hash Load Balancer           │
-│   Infollion Software Developer Intern — Task 3  │
-├─────────────────────────────────────────────────┤
-│   Server  : http://localhost:3000               │
-│   Dashboard: http://localhost:3000/dashboard    │
-└─────────────────────────────────────────────────┘
-```
-
-Open **http://localhost:3000/dashboard** for the live metrics dashboard.
-
----
-
-## API Reference
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/request?ip=x.x.x.x` | Route an IP to a node |
-| `GET` | `/api/request?simulate=true` | Route a randomly generated IP |
-| `GET` | `/api/nodes` | List all nodes (weight, health, vnode count) |
-| `PUT` | `/api/nodes/:id/status` | Manually set a node's health status |
-| `GET` | `/api/metrics` | Full metrics snapshot |
-| `GET` | `/dashboard` | Live browser metrics dashboard |
-
-### Example Requests
-
-```bash
-# Route a fixed IP (run multiple times — always same node)
-curl "http://localhost:3000/api/request?ip=192.168.1.100"
-
-# Mark Node-B as unhealthy
-curl -X PUT "http://localhost:3000/api/nodes/Node-B/status" \
-  -H "Content-Type: application/json" \
-  -d '{"healthy": false}'
-
-# Get metrics
-curl "http://localhost:3000/api/metrics"
-```
-
----
-
-## Configuration (`.env`)
-
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3000` | HTTP server port |
-| `HOST` | `localhost` | HTTP server host |
-| `VIRTUAL_NODES_PER_WEIGHT` | `150` | Virtual nodes per weight unit (higher = more even distribution) |
-| `RATE_LIMIT_MAX` | `10` | Max requests per IP per window |
-| `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in milliseconds (60s) |
-| `HEALTH_CHECK_INTERVAL_MS` | `10000` | How often health checks run (10s) |
-| `HEALTH_CHECK_FAIL_PROBABILITY` | `0.1` | Probability a node "fails" each check cycle |
-| `LOG_TO_FILE` | `true` | Whether to write logs to a file |
-| `LOG_FILE_PATH` | `./logs/requests.log` | Log file path |
-
----
-
-## Default Nodes & Weights
-
-| Node | Weight | Virtual Nodes | Expected Traffic Share |
-|---|---|---|---|
-| Node-A | 1 | 150 | ~25% |
-| Node-B | 2 | 300 | ~50% |
-| Node-C | 1 | 150 | ~25% |
-
----
-
-## Example Log Output
-
-```
-[2026-05-07T02:30:00.000Z] [INFO ] Incoming IP: 192.168.1.100 → Routed to: Node-A
-[2026-05-07T02:30:01.000Z] [INFO ] Incoming IP: 10.0.0.50 → Routed to: Node-B
-[2026-05-07T02:30:10.000Z] [WARN ] HealthChecker: Node "Node-C" marked UNHEALTHY (simulated failure).
-[2026-05-07T02:30:20.000Z] [INFO ] HealthChecker: Node "Node-C" has RECOVERED.
-[2026-05-07T02:30:21.000Z] [WARN ] Rate limit exceeded for IP: 10.10.10.10
-```
-
----
-
-## Postman Collection
-
-Import `postman/load-balancer.postman_collection.json` directly into Postman.
-
-The collection includes 12 requests covering:
-- Consistent routing demo (same IP → same node, always)
-- Failover demo (mark a node unhealthy, watch IPs re-map)
-- Rate limiting demo (11th request → 429)
-- All error cases (400, 404, 503)
-
----
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 ├── src/
-│   ├── config/config.js        # Environment config
+│   ├── config/config.js        # Environment configuration
 │   ├── core/
-│   │   ├── hashRing.js         # Consistent Hash Ring (the brain)
-│   │   ├── rateLimiter.js      # Fixed-window rate limiter
+│   │   ├── hashRing.js         # Consistent Hash Ring logic
+│   │   ├── rateLimiter.js      # Fixed-window map logic
 │   │   ├── healthChecker.js    # Simulated health polling
-│   │   └── metricsStore.js     # In-memory metrics
+│   │   └── metricsStore.js     # In-memory traffic counters
 │   ├── utils/
-│   │   ├── hash.js             # FNV-1a hash function
-│   │   └── logger.js           # Timestamped logger
-│   ├── routes/                 # Express route handlers
-│   ├── dashboard/index.html    # Live metrics dashboard
-│   └── app.js                  # Express app factory
+│   │   ├── hash.js             # Pure JS FNV-1a hash algorithm
+│   │   └── logger.js           # Console timestamp formatter
+│   ├── routes/                 # Express API endpoints
+│   ├── dashboard/index.html    # Live metrics dashboard HTML
+│   └── app.js                  # Express app & dependency injection
 ├── starter/original.js         # Unmodified assignment starter code
 ├── postman/                    # Postman collection
+├── tests/                      # Automated bash testing scripts
 ├── server.js                   # Entry point
 └── .env.example                # Config template
 ```
@@ -189,5 +140,4 @@ The collection includes 12 requests covering:
 ---
 
 ## License
-
 ISC
