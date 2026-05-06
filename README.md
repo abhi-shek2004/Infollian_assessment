@@ -102,44 +102,13 @@ To achieve an even distribution of traffic and support weighted nodes, this proj
 
 ```mermaid
 graph TD
-    %% Entities
-    Client[Client Request]
-    RateLimiter[Rate Limiter\nFixed Window Map]
-    HashRing[Consistent Hash Ring\nFNV-1a 32-bit]
-    HealthChecker[Health Checker\nsetInterval Polling]
+    Client[Incoming IP Request] -->|Hash IP| HashRing{Consistent Hash Ring}
     
-    %% Nodes
-    NodeA[Node-A\nWeight: 1]
-    NodeB[Node-B\nWeight: 2]
-    NodeC[Node-C\nWeight: 1]
+    HashRing -->|Route to Node| NodeA[Node A]
+    HashRing -->|Route to Node| NodeB[Node B]
+    HashRing -->|Route to Node| NodeC[Node C]
     
-    %% Flow
-    Client -->|GET /api/request?ip=x.x.x.x| RateLimiter
-    
-    RateLimiter -- "If > 10 req/min" --> Block[429 Too Many Requests]
-    RateLimiter -- "Allowed" --> HashRing
-    
-    %% Hash Ring routing
-    HashRing -- "IP Hash matches vNode" --> NodeA
-    HashRing -- "IP Hash matches vNode" --> NodeB
-    HashRing -- "IP Hash matches vNode" --> NodeC
-    
-    %% Health Checker
-    HealthChecker -. "Polls & Updates Status" .-> HashRing
-    
-    %% Dashboard
-    Metrics[Metrics Store\nIn-memory]
-    HashRing -. "Logs Request" .-> Metrics
-    RateLimiter -. "Logs Blocked" .-> Metrics
-    Dashboard[Live HTML Dashboard] -. "Fetches Data" .-> Metrics
-    
-    classDef node fill:#1a202c,stroke:#2d3748,stroke-width:2px,color:#fff;
-    classDef core fill:#2b6cb0,stroke:#2c5282,stroke-width:2px,color:#fff;
-    classDef error fill:#9b2c2c,stroke:#742a2a,stroke-width:2px,color:#fff;
-    
-    class Client,Dashboard node;
-    class RateLimiter,HashRing,HealthChecker,Metrics core;
-    class Block error;
+    HealthChecker[Health Checker] -.->|Removes failed nodes| HashRing
 ```
 
 - Each real node creates `150 * weight` virtual nodes on the ring.
