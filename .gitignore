@@ -12,11 +12,11 @@ logs/*.log
 .DS_Store
 
 # venv
-./venv/
-./venv/*
+venv/
 
 # ai_docs
-./ai_docs/*
+ai_docs/
 
-# tests
-tests/*
+# Archives
+*.zip
+archive.zip
