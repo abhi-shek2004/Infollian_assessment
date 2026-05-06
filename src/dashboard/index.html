@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Load Balancer — Metrics Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid #2d3748;
+      padding-bottom: 1rem;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #63b3ed;
+    }
+
+    .badge {
+      background: #2d3748;
+      border-radius: 9999px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.75rem;
+      color: #a0aec0;
+    }
+
+    .auto-refresh-note {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: #718096;
+    }
+
+    /* Summary cards */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: #1a202c;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+    }
+
+    .card .label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #718096;
+      margin-bottom: 0.4rem;
+    }
+
+    .card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .card .value.green { color: #68d391; }
+    .card .value.red   { color: #fc8181; }
+    .card .value.blue  { color: #63b3ed; }
+
+    /* Tables */
+    section {
+      margin-bottom: 2rem;
+    }
+
+    section h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #a0aec0;
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #1a202c;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    thead {
+      background: #2d3748;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #a0aec0;
+      font-weight: 600;
+    }
+
+    td {
+      padding: 0.75rem 1rem;
+      border-top: 1px solid #2d3748;
+      font-size: 0.9rem;
+    }
+
+    tr:hover td {
+      background: #232b3a;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 0.2rem 0.65rem;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-pill.healthy   { background: #1c4532; color: #68d391; }
+    .status-pill.unhealthy { background: #4a1111; color: #fc8181; }
+
+    .progress-bar-wrap {
+      background: #2d3748;
+      border-radius: 9999px;
+      height: 6px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: #63b3ed;
+      border-radius: 9999px;
+      transition: width 0.4s ease;
+    }
+
+    footer {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.72rem;
+      color: #4a5568;
+    }
+
+    #last-updated {
+      font-size: 0.75rem;
+      color: #718096;
+      margin-top: 0.25rem;
+    }
+
+    .error-banner {
+      background: #4a1111;
+      color: #fc8181;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⚖️ Load Balancer Dashboard</h1>
+  <span class="badge">Consistent Hash Ring</span>
+  <span class="auto-refresh-note" id="last-updated">Loading...</span>
+</header>
+
+<div class="error-banner" id="error-banner">
+  ⚠️ Failed to fetch data from the API. Is the server running?
+</div>
+
+<!-- Summary Cards -->
+<div class="cards">
+  <div class="card">
+    <div class="label">Total Requests</div>
+    <div class="value blue" id="totalRequests">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Blocked (Rate Limited)</div>
+    <div class="value red" id="blockedRequests">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Healthy Nodes</div>
+    <div class="value green" id="healthyNodes">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Unhealthy Nodes</div>
+    <div class="value red" id="unhealthyNodes">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Uptime</div>
+    <div class="value" id="uptime">—</div>
+  </div>
+</div>
+
+<!-- Node Status Table -->
+<section>
+  <h2>Node Status &amp; Traffic</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Node</th>
+        <th>Status</th>
+        <th>Weight</th>
+        <th>Virtual Nodes</th>
+        <th>Requests Served</th>
+        <th>Traffic Share</th>
+      </tr>
+    </thead>
+    <tbody id="nodes-table-body">
+      <tr><td colspan="6" style="color:#4a5568;text-align:center;">Loading...</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<footer>
+  Smart Consistent Hash Load Balancer · Auto-refreshes every 5 seconds
+</footer>
+
+<script>
+  async function fetchData() {
+    const errorBanner = document.getElementById('error-banner');
+    try {
+      const [metricsRes, nodesRes] = await Promise.all([
+        fetch('/api/metrics'),
+        fetch('/api/nodes'),
+      ]);
+
+      if (!metricsRes.ok || !nodesRes.ok) throw new Error('API error');
+
+      const metrics = await metricsRes.json();
+      const { nodes } = await nodesRes.json();
+
+      errorBanner.style.display = 'none';
+      render(metrics, nodes);
+    } catch (err) {
+      errorBanner.style.display = 'block';
+    }
+  }
+
+  function render(metrics, nodes) {
+    // Summary cards
+    document.getElementById('totalRequests').textContent = metrics.totalRequests;
+    document.getElementById('blockedRequests').textContent = metrics.blockedRequests;
+    document.getElementById('healthyNodes').textContent = metrics.healthyNodeCount;
+    document.getElementById('unhealthyNodes').textContent = metrics.unhealthyNodes.length;
+    document.getElementById('uptime').textContent = metrics.uptime;
+    document.getElementById('last-updated').textContent =
+      'Last updated: ' + new Date().toLocaleTimeString();
+
+    // Node table
+    const tbody = document.getElementById('nodes-table-body');
+    if (!nodes.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="color:#4a5568;text-align:center;">No nodes registered.</td></tr>';
+      return;
+    }
+
+    const total = metrics.totalRequests || 1; // avoid division by zero
+    tbody.innerHTML = nodes.map((node) => {
+      const requests = (metrics.requestsPerNode || {})[node.id] || 0;
+      const share = total > 0 ? ((requests / total) * 100).toFixed(1) : 0;
+      const statusClass = node.healthy ? 'healthy' : 'unhealthy';
+      const statusLabel = node.healthy ? 'Healthy' : 'Unhealthy';
+
+      return `
+        <tr>
+          <td><strong>${node.id}</strong></td>
+          <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
+          <td>${node.weight}</td>
+          <td>${node.vnodeCount}</td>
+          <td>${requests}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <div class="progress-bar-wrap" style="flex:1">
+                <div class="progress-bar" style="width:${share}%"></div>
+              </div>
+              <span style="font-size:0.8rem;color:#a0aec0;width:40px;text-align:right">${share}%</span>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // Fetch immediately, then every 5 seconds
+  fetchData();
+  setInterval(fetchData, 5000);
+</script>
+</body>
+</html>

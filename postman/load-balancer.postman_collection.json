@@ -1,0 +1,244 @@
+{
+  "info": {
+    "name": "Smart Consistent Hash Load Balancer",
+    "description": "Postman collection for the Infollion SDE Intern Assignment — Task 3.\nAll requests target http://localhost:3000 by default.\nChange the `base_url` collection variable to match your environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Route — Fixed IP (Consistency Demo)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/request?ip=192.168.1.100",
+          "host": ["{{base_url}}"],
+          "path": ["api", "request"],
+          "query": [{ "key": "ip", "value": "192.168.1.100" }]
+        },
+        "description": "Routes a fixed IP. Run this multiple times — it must ALWAYS return the same node, proving consistent hashing."
+      },
+      "response": [
+        {
+          "name": "200 OK — Routed",
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"ip\": \"192.168.1.100\",\n  \"node\": \"Node-A\",\n  \"timestamp\": \"2026-05-07T02:30:00.000Z\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "2. Route — Another Fixed IP",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/request?ip=10.0.0.50",
+          "host": ["{{base_url}}"],
+          "path": ["api", "request"],
+          "query": [{ "key": "ip", "value": "10.0.0.50" }]
+        },
+        "description": "Different IP — proves different IPs can hash to different nodes."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Route — Simulate (Random IP)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/request?simulate=true",
+          "host": ["{{base_url}}"],
+          "path": ["api", "request"],
+          "query": [{ "key": "simulate", "value": "true" }]
+        },
+        "description": "Generates a random IP server-side and routes it. Used to quickly populate metrics."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Route — Missing IP (Error 400)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/request",
+          "host": ["{{base_url}}"],
+          "path": ["api", "request"]
+        },
+        "description": "No ip parameter — server should return 400 Bad Request."
+      },
+      "response": [
+        {
+          "name": "400 Bad Request",
+          "status": "Bad Request",
+          "code": 400,
+          "body": "{\n  \"error\": \"Missing required query parameter: ip\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "5. Route — Invalid IP Format (Error 400)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/request?ip=not-an-ip",
+          "host": ["{{base_url}}"],
+          "path": ["api", "request"],
+          "query": [{ "key": "ip", "value": "not-an-ip" }]
+        },
+        "description": "Invalid IP format — should return 400."
+      },
+      "response": []
+    },
+    {
+      "name": "6. Get All Nodes",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/nodes",
+          "host": ["{{base_url}}"],
+          "path": ["api", "nodes"]
+        },
+        "description": "Returns all registered nodes with their weight, health status, and virtual node count."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"nodes\": [\n    { \"id\": \"Node-A\", \"weight\": 1, \"healthy\": true, \"vnodeCount\": 150 },\n    { \"id\": \"Node-B\", \"weight\": 2, \"healthy\": true, \"vnodeCount\": 300 },\n    { \"id\": \"Node-C\", \"weight\": 1, \"healthy\": true, \"vnodeCount\": 150 }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "7. Mark Node-B Unhealthy",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"healthy\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/nodes/Node-B/status",
+          "host": ["{{base_url}}"],
+          "path": ["api", "nodes", "Node-B", "status"]
+        },
+        "description": "Marks Node-B as unhealthy. Its virtual nodes are removed from the ring immediately. Subsequent requests for IPs that were routed to Node-B will re-map to Node-A or Node-C."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"id\": \"Node-B\",\n  \"healthy\": false,\n  \"message\": \"Node \\\"Node-B\\\" status updated to UNHEALTHY.\",\n  \"healthyNodesRemaining\": 2\n}"
+        }
+      ]
+    },
+    {
+      "name": "8. Route After Node-B Down (Failover Demo)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/request?ip=192.168.1.100",
+          "host": ["{{base_url}}"],
+          "path": ["api", "request"],
+          "query": [{ "key": "ip", "value": "192.168.1.100" }]
+        },
+        "description": "Same IP as Request #1. With Node-B down, this IP may now route to a different node. Demonstrates health-aware failover."
+      },
+      "response": []
+    },
+    {
+      "name": "9. Restore Node-B to Healthy",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"healthy\": true\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/nodes/Node-B/status",
+          "host": ["{{base_url}}"],
+          "path": ["api", "nodes", "Node-B", "status"]
+        },
+        "description": "Restores Node-B. Its virtual nodes are re-added to the ring and it starts receiving traffic again."
+      },
+      "response": []
+    },
+    {
+      "name": "10. Trigger Rate Limit (run 11+ times for same IP)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/request?ip=10.10.10.10",
+          "host": ["{{base_url}}"],
+          "path": ["api", "request"],
+          "query": [{ "key": "ip", "value": "10.10.10.10" }]
+        },
+        "description": "Send this request 11+ times rapidly. The 11th request will return 429 Too Many Requests (default limit: 10 per minute)."
+      },
+      "response": [
+        {
+          "name": "429 Too Many Requests",
+          "status": "Too Many Requests",
+          "code": 429,
+          "body": "{\n  \"error\": \"Rate limit exceeded. Too many requests.\",\n  \"retryAfterSeconds\": 58,\n  \"hint\": \"Wait 58s before retrying.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "11. Get Metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/metrics",
+          "host": ["{{base_url}}"],
+          "path": ["api", "metrics"]
+        },
+        "description": "Returns a full metrics snapshot: total requests, per-node counts, blocked requests, healthy/unhealthy nodes, and uptime."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"uptime\": \"2m 34s\",\n  \"totalRequests\": 42,\n  \"blockedRequests\": 3,\n  \"requestsPerNode\": {\n    \"Node-A\": 11,\n    \"Node-B\": 20,\n    \"Node-C\": 11\n  },\n  \"healthyNodeCount\": 3,\n  \"unhealthyNodes\": [],\n  \"totalNodes\": 3\n}"
+        }
+      ]
+    },
+    {
+      "name": "12. Unknown Node ID (Error 404)",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"healthy\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/nodes/Node-Z/status",
+          "host": ["{{base_url}}"],
+          "path": ["api", "nodes", "Node-Z", "status"]
+        },
+        "description": "Node-Z does not exist — should return 404."
+      },
+      "response": []
+    }
+  ]
+}
