@@ -1,6 +1,6 @@
 # Smart Consistent Hash Load Balancer
 
-> **Infollion Software Developer Intern Assignment — Task 3**
+> **Smart Consistent Hash Load Balancer**
 
 A production-grade Node.js/Express load balancer that routes incoming IP addresses to backend nodes using **Consistent Hashing** — ensuring the same IP always hits the same node, even when nodes are added or removed.
 
